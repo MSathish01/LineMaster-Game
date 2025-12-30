@@ -2,6 +2,10 @@
 
 A modern, strategic board game inspired by Shisima and Achi, featuring stunning visuals, smooth animations, and an intelligent AI opponent.
 
+## 🌐 Play Now
+
+**[▶️ Play LineMaster Live](https://linemaster-game.web.app)**
+
 ![Game Preview](https://img.shields.io/badge/Status-Live-success)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![HTML5](https://img.shields.io/badge/HTML5-E34F26?logo=html5&logoColor=white)
