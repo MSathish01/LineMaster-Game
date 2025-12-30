@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0a0a0a">
+    <meta name="description" content="LineMaster - A strategic board game with AI opponent">
+    <title>LineMaster Game</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+</head>
+<body>
+    <div class="game-container">
+        <div class="header">
+            <h1>LINEMASTER</h1>
+            <div class="mode-selector">
+                <button id="pvpMode" class="mode-btn active">vs Player</button>
+                <button id="pvcMode" class="mode-btn">vs Robot</button>
+            </div>
+        </div>
+
+        <div class="game-info">
+            <div class="player-status" id="player1Status">
+                <div class="player-indicator p1"></div>
+                <span>Player 1</span>
+                <div class="coins-left" id="p1Coins">3 left</div>
+            </div>
+            <div class="phase-indicator" id="phaseIndicator">Place Coins</div>
+            <div class="player-status" id="player2Status">
+                <div class="player-indicator p2"></div>
+                <span>Player 2</span>
+                <div class="coins-left" id="p2Coins">3 left</div>
+            </div>
+        </div>
+
+        <div class="board-wrapper">
+            <svg class="board-lines" id="boardLines" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet">
+                <!-- Horizontal lines -->
+                <line x1="50" y1="50" x2="350" y2="50" class="connection-line" />
+                <line x1="50" y1="200" x2="350" y2="200" class="connection-line" />
+                <line x1="50" y1="350" x2="350" y2="350" class="connection-line" />
+                <!-- Vertical lines -->
+                <line x1="50" y1="50" x2="50" y2="350" class="connection-line" />
+                <line x1="200" y1="50" x2="200" y2="350" class="connection-line" />
+                <line x1="350" y1="50" x2="350" y2="350" class="connection-line" />
+                <!-- Diagonal lines -->
+                <line x1="50" y1="50" x2="350" y2="350" class="connection-line" />
+                <line x1="350" y1="50" x2="50" y2="350" class="connection-line" />
+            </svg>
+
+            <div class="board" id="board">
+                <div class="node" data-pos="0"></div>
+                <div class="node" data-pos="1"></div>
+                <div class="node" data-pos="2"></div>
+                <div class="node" data-pos="3"></div>
+                <div class="node" data-pos="4"></div>
+                <div class="node" data-pos="5"></div>
+                <div class="node" data-pos="6"></div>
+                <div class="node" data-pos="7"></div>
+                <div class="node" data-pos="8"></div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="resetBtn" class="control-btn">New Game</button>
+            <button id="undoBtn" class="control-btn" disabled>Undo</button>
+        </div>
+
+        <div class="message" id="message"></div>
+    </div>
+
+    <div class="modal" id="winModal">
+        <div class="modal-content">
+            <h2 id="winMessage"></h2>
+            <button id="playAgainBtn" class="control-btn">Play Again</button>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>

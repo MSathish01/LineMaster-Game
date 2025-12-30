@@ -1,589 +1,497 @@
-class ShisimaGame {
+class Game {
     constructor() {
         this.board = Array(9).fill(null);
-        this.currentPlayer = 1;
-        this.phase = 'placement'; // 'placement' or 'movement'
-        this.coinsPlaced = { 1: 0, 2: 0 };
-        this.selectedCoin = null;
-        this.gameMode = 'pvp'; // 'pvp' or 'pvc'
-        this.gameOver = false;
-        this.moveHistory = [];
+        this.turn = 1;
+        this.phase = 'place';
+        this.placed = [0, 0, 0];
+        this.selected = null;
+        this.mode = 'pvp';
+        this.over = false;
+        this.history = [];
+        this.drag = null;
+        this.names = ['', 'Player 1', 'Player 2'];
         
-        // Adjacent connections for each position
-        this.adjacency = {
-            0: [1, 3, 4],
-            1: [0, 2, 4],
-            2: [1, 4, 5],
-            3: [0, 4, 6],
-            4: [0, 1, 2, 3, 5, 6, 7, 8], // center connects to all
-            5: [2, 4, 8],
-            6: [3, 4, 7],
-            7: [4, 6, 8],
-            8: [4, 5, 7]
+        this.adj = {
+            0:[1,3,4], 1:[0,2,4], 2:[1,4,5],
+            3:[0,4,6], 4:[0,1,2,3,5,6,7,8], 5:[2,4,8],
+            6:[3,4,7], 7:[4,6,8], 8:[4,5,7]
         };
-        
-        this.winPatterns = [
-            [0, 1, 2], [3, 4, 5], [6, 7, 8], // rows
-            [0, 3, 6], [1, 4, 7], [2, 5, 8], // columns
-            [0, 4, 8], [2, 4, 6]              // diagonals
-        ];
+        this.wins = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
         
         this.init();
     }
     
     init() {
-        this.setupEventListeners();
+        // Mode buttons
+        document.getElementById('pvpBtn').onclick = () => this.setMode('pvp');
+        document.getElementById('pvcBtn').onclick = () => this.setMode('pvc');
+        document.getElementById('startBtn').onclick = () => this.start();
+        document.getElementById('undoBtn').onclick = () => this.undo();
+        document.getElementById('menuBtn').onclick = () => this.menu();
+        document.getElementById('againBtn').onclick = () => this.restart();
+        document.getElementById('newBtn').onclick = () => this.menu();
+        
+        // Node taps - immediate response
+        document.querySelectorAll('.node').forEach((n, i) => {
+            const tap = e => { 
+                e.preventDefault(); 
+                e.stopPropagation();
+                this.tapNode(i); 
+            };
+            n.addEventListener('touchstart', tap, {passive: false});
+            n.addEventListener('click', tap);
+        });
+        
+        // Drag events with passive: false for immediate response
+        const board = document.getElementById('board');
+        
+        // Prevent default touch behavior on board
+        board.addEventListener('touchstart', e => this.touchStart(e), {passive: false});
+        board.addEventListener('touchmove', e => this.touchMove(e), {passive: false});
+        board.addEventListener('touchend', e => this.touchEnd(e), {passive: false});
+        board.addEventListener('touchcancel', e => this.touchEnd(e), {passive: false});
+        
+        // Mouse events
+        board.addEventListener('mousedown', e => this.mouseDown(e));
+        document.addEventListener('mousemove', e => this.mouseMove(e));
+        document.addEventListener('mouseup', e => this.mouseUp(e));
+        
+        // Prevent context menu on long press
+        board.addEventListener('contextmenu', e => e.preventDefault());
+        
+        window.onresize = () => this.reposition();
+    }
+    
+    setMode(m) {
+        this.mode = m;
+        document.getElementById('pvpBtn').classList.toggle('active', m === 'pvp');
+        document.getElementById('pvcBtn').classList.toggle('active', m === 'pvc');
+        const f = document.getElementById('p2Field');
+        const inp = document.getElementById('p2NameInput');
+        if (m === 'pvc') {
+            f.style.opacity = '0.5';
+            inp.value = 'Robot 🤖';
+            inp.disabled = true;
+        } else {
+            f.style.opacity = '1';
+            inp.value = 'Player 2';
+            inp.disabled = false;
+        }
+    }
+
+    start() {
+        this.names[1] = document.getElementById('p1NameInput').value.trim() || 'Player 1';
+        this.names[2] = document.getElementById('p2NameInput').value.trim() || 'Player 2';
+        document.getElementById('p1Name').textContent = this.names[1];
+        document.getElementById('p2Name').textContent = this.names[2];
+        document.getElementById('setupScreen').classList.add('hidden');
+        document.getElementById('gameScreen').classList.remove('hidden');
+        this.restart();
+    }
+    
+    menu() {
+        document.getElementById('gameScreen').classList.add('hidden');
+        document.getElementById('setupScreen').classList.remove('hidden');
+        document.getElementById('winModal').classList.remove('show');
+    }
+    
+    restart() {
+        this.board = Array(9).fill(null);
+        this.turn = 1;
+        this.phase = 'place';
+        this.placed = [0, 0, 0];
+        this.selected = null;
+        this.over = false;
+        this.history = [];
+        document.querySelectorAll('.coin').forEach(c => c.remove());
+        document.getElementById('winModal').classList.remove('show');
+        this.clearSel();
         this.updateUI();
     }
     
-    setupEventListeners() {
-        // Mode selection
-        document.getElementById('pvpMode').addEventListener('click', () => this.setMode('pvp'));
-        document.getElementById('pvcMode').addEventListener('click', () => this.setMode('pvc'));
+    // Touch handlers - optimized for mobile
+    touchStart(e) {
+        if (this.phase !== 'move' || this.over) return;
         
-        // Board clicks for placement
-        document.querySelectorAll('.node').forEach((node, index) => {
-            node.addEventListener('click', () => this.handleNodeClick(index));
-        });
+        const t = e.touches[0];
+        const coin = this.findCoin(t.clientX, t.clientY);
+        if (!coin || +coin.dataset.p !== this.turn) return;
         
-        // Control buttons
-        document.getElementById('resetBtn').addEventListener('click', () => this.reset());
-        document.getElementById('undoBtn').addEventListener('click', () => this.undoMove());
-        document.getElementById('playAgainBtn').addEventListener('click', () => this.reset());
+        // Prevent ALL default behavior
+        e.preventDefault();
+        e.stopPropagation();
         
-        // Drag and drop setup
-        this.setupDragAndDrop();
+        this.startDrag(coin, t.clientX, t.clientY);
     }
     
-    setupDragAndDrop() {
-        let draggedCoin = null;
-        let dragStartPos = null;
-        let offset = { x: 0, y: 0 };
+    touchMove(e) {
+        if (!this.drag) return;
         
-        document.addEventListener('mousedown', (e) => {
-            if (this.phase !== 'movement' || this.gameOver) return;
+        // Must prevent default to stop scrolling
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const t = e.touches[0];
+        this.moveDrag(t.clientX, t.clientY);
+    }
+    
+    touchEnd(e) {
+        if (!this.drag) return;
+        
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const t = e.changedTouches[0];
+        this.endDrag(t.clientX, t.clientY);
+    }
+    
+    mouseDown(e) {
+        if (this.phase !== 'move' || this.over) return;
+        const coin = e.target.closest('.coin:not(.ghost)');
+        if (!coin || +coin.dataset.p !== this.turn) return;
+        this.startDrag(coin, e.clientX, e.clientY);
+    }
+    
+    mouseMove(e) {
+        if (this.drag) this.moveDrag(e.clientX, e.clientY);
+    }
+    
+    mouseUp(e) {
+        if (this.drag) this.endDrag(e.clientX, e.clientY);
+    }
+    
+    startDrag(coin, x, y) {
+        // Cache board rect for precision coordinate mapping
+        this.boardRect = document.getElementById('board').getBoundingClientRect();
+        
+        this.drag = {
+            coin, 
+            pos: +coin.dataset.pos, 
+            startX: x, 
+            startY: y, 
+            moved: false
+        };
+        
+        // Disable transitions for lag-free dragging
+        coin.style.transition = 'none';
+        coin.classList.add('dragging');
+        
+        this.select(this.drag.pos);
+        
+        // Haptic feedback
+        if (navigator.vibrate) navigator.vibrate(10);
+    }
+    
+    moveDrag(x, y) {
+        const d = this.drag;
+        
+        // Check if actually moved (threshold 5px)
+        if (!d.moved) {
+            const dx = Math.abs(x - d.startX);
+            const dy = Math.abs(y - d.startY);
+            if (dx > 5 || dy > 5) {
+                d.moved = true;
+            }
+        }
+        
+        if (d.moved) {
+            // Precision coordinate mapping using cached boardRect
+            const coinSize = d.coin.offsetWidth;
+            const newX = x - this.boardRect.left - (coinSize / 2);
+            const newY = y - this.boardRect.top - (coinSize / 2);
             
-            const coin = e.target.closest('.coin');
-            if (coin && parseInt(coin.dataset.player) === this.currentPlayer) {
-                draggedCoin = coin;
-                dragStartPos = parseInt(coin.dataset.pos);
-                
-                const rect = coin.getBoundingClientRect();
-                offset.x = e.clientX - rect.left - rect.width / 2;
-                offset.y = e.clientY - rect.top - rect.height / 2;
-                
-                coin.classList.add('dragging');
-                this.selectedCoin = dragStartPos;
-                this.showValidMoves(dragStartPos);
+            // Direct style manipulation for 60fps performance
+            d.coin.style.left = newX + 'px';
+            d.coin.style.top = newY + 'px';
+        }
+    }
+    
+    endDrag(x, y) {
+        const d = this.drag;
+        
+        // Remove dragging state
+        d.coin.classList.remove('dragging');
+        
+        // Restore smooth transition for snap animation
+        d.coin.style.transition = 'left 0.2s ease-out, top 0.2s ease-out, transform 0.15s ease-out';
+        
+        if (d.moved) {
+            // 60px snap threshold
+            const target = this.findNode(x, y, 60);
+            
+            if (target !== null && this.canMove(d.pos, target)) {
+                this.move(d.pos, target);
+                if (navigator.vibrate) navigator.vibrate(15);
+            } else {
+                // Snap back to original position
+                this.position(d.coin, d.pos);
+            }
+            this.clearSel();
+        } else {
+            // Was a tap, not drag - keep selected
+            this.position(d.coin, d.pos);
+            d.coin.classList.add('selected');
+        }
+        
+        this.drag = null;
+        this.boardRect = null;
+    }
+    
+    findCoin(x, y) {
+        for (const el of document.elementsFromPoint(x, y)) {
+            if (el.classList.contains('coin') && !el.classList.contains('ghost')) return el;
+        }
+        return null;
+    }
+    
+    findNode(x, y, threshold = 60) {
+        let best = null;
+        let minDist = threshold;
+        
+        document.querySelectorAll('.node').forEach((n, i) => {
+            const r = n.getBoundingClientRect();
+            const centerX = r.left + r.width / 2;
+            const centerY = r.top + r.height / 2;
+            
+            // Euclidean distance
+            const dist = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+            
+            if (dist < minDist) {
+                minDist = dist;
+                best = i;
             }
         });
         
-        document.addEventListener('mousemove', (e) => {
-            if (!draggedCoin) return;
-            
-            const boardRect = document.getElementById('board').getBoundingClientRect();
-            draggedCoin.style.left = (e.clientX - boardRect.left - offset.x) + 'px';
-            draggedCoin.style.top = (e.clientY - boardRect.top - offset.y) + 'px';
-        });
-        
-        document.addEventListener('mouseup', (e) => {
-            if (!draggedCoin) return;
-            
-            const nodes = document.querySelectorAll('.node');
-            let targetNode = null;
-            let minDist = Infinity;
-            
-            nodes.forEach((node, index) => {
-                const rect = node.getBoundingClientRect();
-                const centerX = rect.left + rect.width / 2;
-                const centerY = rect.top + rect.height / 2;
-                const dist = Math.hypot(e.clientX - centerX, e.clientY - centerY);
-                
-                if (dist < minDist && dist < 80) {
-                    minDist = dist;
-                    targetNode = index;
-                }
-            });
-            
-            draggedCoin.classList.remove('dragging');
-            
-            if (targetNode !== null && this.isValidMove(dragStartPos, targetNode)) {
-                this.moveCoin(dragStartPos, targetNode);
-            } else {
-                this.animateCoinToPosition(draggedCoin, dragStartPos);
-            }
-            
-            this.clearValidMoves();
-            draggedCoin = null;
-            dragStartPos = null;
-            this.selectedCoin = null;
-        });
-        
-        // Touch support
-        document.addEventListener('touchstart', (e) => {
-            const touch = e.touches[0];
-            const mouseEvent = new MouseEvent('mousedown', {
-                clientX: touch.clientX,
-                clientY: touch.clientY
-            });
-            document.dispatchEvent(mouseEvent);
-        });
-        
-        document.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            const touch = e.touches[0];
-            const mouseEvent = new MouseEvent('mousemove', {
-                clientX: touch.clientX,
-                clientY: touch.clientY
-            });
-            document.dispatchEvent(mouseEvent);
-        }, { passive: false });
-        
-        document.addEventListener('touchend', (e) => {
-            const touch = e.changedTouches[0];
-            const mouseEvent = new MouseEvent('mouseup', {
-                clientX: touch.clientX,
-                clientY: touch.clientY
-            });
-            document.dispatchEvent(mouseEvent);
-        });
+        return best;
     }
-    
-    setMode(mode) {
-        this.gameMode = mode;
-        document.getElementById('pvpMode').classList.toggle('active', mode === 'pvp');
-        document.getElementById('pvcMode').classList.toggle('active', mode === 'pvc');
-        this.reset();
-    }
-    
-    handleNodeClick(position) {
-        if (this.gameOver) return;
-        
-        if (this.phase === 'placement') {
-            this.placeCoin(position);
-        } else if (this.phase === 'movement') {
-            if (this.selectedCoin === null) {
-                // Select a coin
-                if (this.board[position] === this.currentPlayer) {
-                    this.selectedCoin = position;
-                    this.showValidMoves(position);
-                }
-            } else {
-                // Move the selected coin
-                if (this.isValidMove(this.selectedCoin, position)) {
-                    this.moveCoin(this.selectedCoin, position);
-                    this.clearValidMoves();
-                    this.selectedCoin = null;
-                } else if (this.board[position] === this.currentPlayer) {
-                    // Select different coin
-                    this.clearValidMoves();
-                    this.selectedCoin = position;
-                    this.showValidMoves(position);
+
+    tapNode(pos) {
+        if (this.over || this.drag) return;
+        if (this.phase === 'place') {
+            this.place(pos);
+        } else {
+            if (this.selected !== null) {
+                if (this.canMove(this.selected, pos)) {
+                    this.move(this.selected, pos);
+                    this.clearSel();
+                } else if (this.board[pos] === this.turn) {
+                    this.select(pos);
                 } else {
-                    this.clearValidMoves();
-                    this.selectedCoin = null;
+                    this.clearSel();
                 }
+            } else if (this.board[pos] === this.turn) {
+                this.select(pos);
             }
         }
     }
     
-    placeCoin(position) {
-        if (this.board[position] !== null) return;
-        
-        // Check if placement would create a win (not allowed in placement phase)
-        const testBoard = [...this.board];
-        testBoard[position] = this.currentPlayer;
-        if (this.checkWin(testBoard, this.currentPlayer)) {
-            this.showMessage("Cannot form a line during placement!");
-            return;
-        }
-        
-        this.board[position] = this.currentPlayer;
-        this.coinsPlaced[this.currentPlayer]++;
-        this.moveHistory.push({ type: 'place', player: this.currentPlayer, position });
-        
-        this.createCoin(position, this.currentPlayer);
-        
-        if (this.coinsPlaced[1] === 3 && this.coinsPlaced[2] === 3) {
-            this.phase = 'movement';
-        }
-        
-        this.switchPlayer();
-        this.updateUI();
+    select(pos) {
+        this.clearSel();
+        this.selected = pos;
+        const coin = document.querySelector(`.coin[data-pos="${pos}"]:not(.ghost)`);
+        if (coin) coin.classList.add('selected');
+        this.showMoves(pos);
     }
     
-    moveCoin(from, to) {
-        if (!this.isValidMove(from, to)) return;
-        
-        this.moveHistory.push({ 
-            type: 'move', 
-            player: this.currentPlayer, 
-            from, 
-            to 
+    clearSel() {
+        this.selected = null;
+        document.querySelectorAll('.coin.selected').forEach(c => c.classList.remove('selected'));
+        document.querySelectorAll('.node.valid').forEach(n => n.classList.remove('valid'));
+        document.querySelectorAll('.coin.ghost').forEach(g => g.remove());
+    }
+    
+    showMoves(pos) {
+        this.adj[pos].forEach(p => {
+            if (this.board[p] === null) {
+                document.querySelector(`.node[data-pos="${p}"]`).classList.add('valid');
+                const g = document.createElement('div');
+                g.className = `coin c${this.turn} ghost`;
+                document.getElementById('board').appendChild(g);
+                this.position(g, p);
+            }
         });
+    }
+    
+    place(pos) {
+        if (this.board[pos] !== null) return;
+        const test = [...this.board];
+        test[pos] = this.turn;
+        if (this.checkWin(test, this.turn)) return;
         
+        this.board[pos] = this.turn;
+        this.placed[this.turn]++;
+        this.history.push({t:'p', p:this.turn, pos});
+        this.createCoin(pos, this.turn);
+        
+        if (this.placed[1] === 3 && this.placed[2] === 3) this.phase = 'move';
+        this.next();
+    }
+    
+    move(from, to) {
+        if (!this.canMove(from, to)) return;
+        this.history.push({t:'m', p:this.turn, from, to});
         this.board[to] = this.board[from];
         this.board[from] = null;
         
-        const coin = document.querySelector(`.coin[data-pos="${from}"]`);
-        coin.dataset.pos = to;
-        this.animateCoinToPosition(coin, to);
-        
-        if (this.checkWin(this.board, this.currentPlayer)) {
-            this.endGame(this.currentPlayer);
-            return;
+        const coin = document.querySelector(`.coin[data-pos="${from}"]:not(.ghost)`);
+        if (coin) {
+            coin.dataset.pos = to;
+            this.position(coin, to);
         }
         
-        this.switchPlayer();
-        this.updateUI();
+        if (this.checkWin(this.board, this.turn)) {
+            this.win(this.turn);
+            return;
+        }
+        this.next();
     }
     
-    isValidMove(from, to) {
-        if (this.board[to] !== null) return false;
-        return this.adjacency[from].includes(to);
+    canMove(from, to) {
+        return this.board[to] === null && this.adj[from].includes(to);
     }
     
-    showValidMoves(position) {
-        this.clearValidMoves();
-        this.adjacency[position].forEach(pos => {
-            if (this.board[pos] === null) {
-                const node = document.querySelector(`.node[data-pos="${pos}"]`);
-                node.classList.add('valid-move');
-                this.createGhostCoin(pos, this.currentPlayer);
-            }
-        });
-        this.highlightConnections(position);
+    createCoin(pos, p) {
+        const c = document.createElement('div');
+        c.className = `coin c${p}`;
+        c.dataset.pos = pos;
+        c.dataset.p = p;
+        document.getElementById('board').appendChild(c);
+        requestAnimationFrame(() => this.position(c, pos));
     }
     
-    clearValidMoves() {
-        document.querySelectorAll('.node').forEach(node => {
-            node.classList.remove('valid-move');
-        });
-        document.querySelectorAll('.ghost-coin').forEach(ghost => ghost.remove());
-        this.clearHighlightedConnections();
-    }
-    
-    highlightConnections(position) {
-        const lines = document.querySelectorAll('.connection-line');
-        // This is a simplified version - you could map specific lines to positions
-        lines.forEach(line => line.classList.add('highlight'));
-    }
-    
-    clearHighlightedConnections() {
-        document.querySelectorAll('.connection-line').forEach(line => {
-            line.classList.remove('highlight');
-        });
-    }
-    
-    createCoin(position, player) {
-        const coin = document.createElement('div');
-        coin.className = `coin player${player}`;
-        coin.dataset.pos = position;
-        coin.dataset.player = player;
+    position(coin, pos) {
+        const node = document.querySelector(`.node[data-pos="${pos}"]`);
+        if (!node) return;
         
-        document.getElementById('board').appendChild(coin);
-        
-        // Animate in
-        setTimeout(() => this.animateCoinToPosition(coin, position), 10);
-    }
-    
-    createGhostCoin(position, player) {
-        const ghost = document.createElement('div');
-        ghost.className = `coin player${player} ghost-coin`;
-        ghost.dataset.pos = position;
-        
-        document.getElementById('board').appendChild(ghost);
-        this.animateCoinToPosition(ghost, position);
-    }
-    
-    animateCoinToPosition(coin, position) {
-        const node = document.querySelector(`.node[data-pos="${position}"]`);
-        const rect = node.getBoundingClientRect();
+        // Use getBoundingClientRect for precision
+        const nodeRect = node.getBoundingClientRect();
         const boardRect = document.getElementById('board').getBoundingClientRect();
+        const coinSize = coin.offsetWidth || 44;
         
-        const x = rect.left - boardRect.left + rect.width / 2 - 30;
-        const y = rect.top - boardRect.top + rect.height / 2 - 30;
+        // Calculate center position
+        const x = nodeRect.left - boardRect.left + (nodeRect.width / 2) - (coinSize / 2);
+        const y = nodeRect.top - boardRect.top + (nodeRect.height / 2) - (coinSize / 2);
         
         coin.style.left = x + 'px';
         coin.style.top = y + 'px';
     }
     
-    checkWin(board, player) {
-        return this.winPatterns.some(pattern => 
-            pattern.every(pos => board[pos] === player)
-        );
+    reposition() {
+        document.querySelectorAll('.coin:not(.ghost)').forEach(c => this.position(c, +c.dataset.pos));
     }
     
-    endGame(winner) {
-        this.gameOver = true;
-        
-        // Highlight winning coins
-        const winningPattern = this.winPatterns.find(pattern =>
-            pattern.every(pos => this.board[pos] === winner)
-        );
-        
-        if (winningPattern) {
-            winningPattern.forEach(pos => {
-                const coin = document.querySelector(`.coin[data-pos="${pos}"]`);
-                if (coin) coin.classList.add('winning');
-            });
-        }
-        
+    checkWin(b, p) {
+        return this.wins.some(w => w.every(i => b[i] === p));
+    }
+    
+    win(p) {
+        this.over = true;
+        const w = this.wins.find(w => w.every(i => this.board[i] === p));
+        if (w) w.forEach(i => {
+            const c = document.querySelector(`.coin[data-pos="${i}"]:not(.ghost)`);
+            if (c) c.classList.add('win');
+        });
         setTimeout(() => {
-            const winnerName = winner === 1 ? 'Player 1' : 
-                              (this.gameMode === 'pvc' ? 'Robot' : 'Player 2');
-            document.getElementById('winMessage').textContent = `${winnerName} Wins!`;
+            document.getElementById('winText').textContent = this.names[p] + ' Wins!';
             document.getElementById('winModal').classList.add('show');
         }, 500);
     }
     
-    switchPlayer() {
-        this.currentPlayer = this.currentPlayer === 1 ? 2 : 1;
-        
-        if (this.gameMode === 'pvc' && this.currentPlayer === 2 && !this.gameOver) {
-            setTimeout(() => this.makeAIMove(), 500);
-        }
-    }
-    
-    makeAIMove() {
-        if (this.phase === 'placement') {
-            const move = this.getAIPlacementMove();
-            if (move !== null) {
-                this.placeCoin(move);
-            }
-        } else {
-            const move = this.getAIMovementMove();
-            if (move) {
-                this.moveCoin(move.from, move.to);
-            }
-        }
-    }
-    
-    getAIPlacementMove() {
-        // Try to block opponent from winning
-        for (let i = 0; i < 9; i++) {
-            if (this.board[i] === null) {
-                const testBoard = [...this.board];
-                testBoard[i] = 1;
-                if (this.checkWin(testBoard, 1)) {
-                    // Block this position
-                    const testBoard2 = [...this.board];
-                    testBoard2[i] = 2;
-                    if (!this.checkWin(testBoard2, 2)) {
-                        return i;
-                    }
-                }
-            }
-        }
-        
-        // Prefer center
-        if (this.board[4] === null) {
-            const testBoard = [...this.board];
-            testBoard[4] = 2;
-            if (!this.checkWin(testBoard, 2)) return 4;
-        }
-        
-        // Random valid move
-        const validMoves = [];
-        for (let i = 0; i < 9; i++) {
-            if (this.board[i] === null) {
-                const testBoard = [...this.board];
-                testBoard[i] = 2;
-                if (!this.checkWin(testBoard, 2)) {
-                    validMoves.push(i);
-                }
-            }
-        }
-        
-        return validMoves.length > 0 ? 
-               validMoves[Math.floor(Math.random() * validMoves.length)] : null;
-    }
-    
-    getAIMovementMove() {
-        const moves = this.getAllPossibleMoves(2);
-        
-        // Check for winning move
-        for (const move of moves) {
-            const testBoard = [...this.board];
-            testBoard[move.to] = testBoard[move.from];
-            testBoard[move.from] = null;
-            if (this.checkWin(testBoard, 2)) {
-                return move;
-            }
-        }
-        
-        // Check for blocking move
-        const opponentMoves = this.getAllPossibleMoves(1);
-        for (const oppMove of opponentMoves) {
-            const testBoard = [...this.board];
-            testBoard[oppMove.to] = testBoard[oppMove.from];
-            testBoard[oppMove.from] = null;
-            if (this.checkWin(testBoard, 1)) {
-                // Try to block by occupying the winning position
-                for (const move of moves) {
-                    if (move.to === oppMove.to) {
-                        return move;
-                    }
-                }
-            }
-        }
-        
-        // Use minimax for best move
-        let bestMove = null;
-        let bestScore = -Infinity;
-        
-        for (const move of moves) {
-            const testBoard = [...this.board];
-            testBoard[move.to] = testBoard[move.from];
-            testBoard[move.from] = null;
-            
-            const score = this.minimax(testBoard, 0, false, -Infinity, Infinity);
-            if (score > bestScore) {
-                bestScore = score;
-                bestMove = move;
-            }
-        }
-        
-        return bestMove || (moves.length > 0 ? moves[0] : null);
-    }
-    
-    getAllPossibleMoves(player) {
-        const moves = [];
-        for (let i = 0; i < 9; i++) {
-            if (this.board[i] === player) {
-                this.adjacency[i].forEach(adj => {
-                    if (this.board[adj] === null) {
-                        moves.push({ from: i, to: adj });
-                    }
-                });
-            }
-        }
-        return moves;
-    }
-    
-    minimax(board, depth, isMaximizing, alpha, beta) {
-        if (this.checkWin(board, 2)) return 10 - depth;
-        if (this.checkWin(board, 1)) return depth - 10;
-        if (depth >= 4) return 0; // Depth limit
-        
-        const player = isMaximizing ? 2 : 1;
-        const moves = [];
-        
-        for (let i = 0; i < 9; i++) {
-            if (board[i] === player) {
-                this.adjacency[i].forEach(adj => {
-                    if (board[adj] === null) {
-                        moves.push({ from: i, to: adj });
-                    }
-                });
-            }
-        }
-        
-        if (moves.length === 0) return 0;
-        
-        if (isMaximizing) {
-            let maxScore = -Infinity;
-            for (const move of moves) {
-                const newBoard = [...board];
-                newBoard[move.to] = newBoard[move.from];
-                newBoard[move.from] = null;
-                const score = this.minimax(newBoard, depth + 1, false, alpha, beta);
-                maxScore = Math.max(maxScore, score);
-                alpha = Math.max(alpha, score);
-                if (beta <= alpha) break;
-            }
-            return maxScore;
-        } else {
-            let minScore = Infinity;
-            for (const move of moves) {
-                const newBoard = [...board];
-                newBoard[move.to] = newBoard[move.from];
-                newBoard[move.from] = null;
-                const score = this.minimax(newBoard, depth + 1, true, alpha, beta);
-                minScore = Math.min(minScore, score);
-                beta = Math.min(beta, score);
-                if (beta <= alpha) break;
-            }
-            return minScore;
-        }
-    }
-    
-    undoMove() {
-        if (this.moveHistory.length === 0 || this.gameOver) return;
-        
-        const lastMove = this.moveHistory.pop();
-        
-        if (lastMove.type === 'place') {
-            this.board[lastMove.position] = null;
-            this.coinsPlaced[lastMove.player]--;
-            const coin = document.querySelector(`.coin[data-pos="${lastMove.position}"]`);
-            if (coin) coin.remove();
-            
-            if (this.phase === 'movement') {
-                this.phase = 'placement';
-            }
-        } else if (lastMove.type === 'move') {
-            this.board[lastMove.from] = lastMove.player;
-            this.board[lastMove.to] = null;
-            const coin = document.querySelector(`.coin[data-pos="${lastMove.to}"]`);
-            if (coin) {
-                coin.dataset.pos = lastMove.from;
-                this.animateCoinToPosition(coin, lastMove.from);
-            }
-        }
-        
-        this.currentPlayer = lastMove.player;
+    next() {
+        this.turn = this.turn === 1 ? 2 : 1;
         this.updateUI();
+        if (this.mode === 'pvc' && this.turn === 2 && !this.over) {
+            setTimeout(() => this.ai(), 500);
+        }
+    }
+
+    ai() {
+        if (this.phase === 'place') {
+            const pos = this.aiPlace();
+            if (pos !== null) this.place(pos);
+        } else {
+            const m = this.aiMove();
+            if (m) this.move(m.from, m.to);
+        }
     }
     
-    reset() {
-        this.board = Array(9).fill(null);
-        this.currentPlayer = 1;
-        this.phase = 'placement';
-        this.coinsPlaced = { 1: 0, 2: 0 };
-        this.selectedCoin = null;
-        this.gameOver = false;
-        this.moveHistory = [];
-        
-        document.querySelectorAll('.coin').forEach(coin => coin.remove());
-        document.getElementById('winModal').classList.remove('show');
-        this.clearValidMoves();
+    aiPlace() {
+        for (let i = 0; i < 9; i++) {
+            if (this.board[i] === null) {
+                const t = [...this.board]; t[i] = 1;
+                if (this.checkWin(t, 1)) {
+                    const t2 = [...this.board]; t2[i] = 2;
+                    if (!this.checkWin(t2, 2)) return i;
+                }
+            }
+        }
+        if (this.board[4] === null) {
+            const t = [...this.board]; t[4] = 2;
+            if (!this.checkWin(t, 2)) return 4;
+        }
+        const v = [];
+        for (let i = 0; i < 9; i++) {
+            if (this.board[i] === null) {
+                const t = [...this.board]; t[i] = 2;
+                if (!this.checkWin(t, 2)) v.push(i);
+            }
+        }
+        return v.length ? v[Math.random() * v.length | 0] : null;
+    }
+    
+    aiMove() {
+        const moves = this.getMoves(2);
+        for (const m of moves) {
+            const t = [...this.board]; t[m.to] = t[m.from]; t[m.from] = null;
+            if (this.checkWin(t, 2)) return m;
+        }
+        for (const om of this.getMoves(1)) {
+            const t = [...this.board]; t[om.to] = t[om.from]; t[om.from] = null;
+            if (this.checkWin(t, 1)) {
+                for (const m of moves) if (m.to === om.to) return m;
+            }
+        }
+        return moves[Math.random() * moves.length | 0];
+    }
+    
+    getMoves(p) {
+        const m = [];
+        for (let i = 0; i < 9; i++) {
+            if (this.board[i] === p) {
+                for (const a of this.adj[i]) if (this.board[a] === null) m.push({from:i, to:a});
+            }
+        }
+        return m;
+    }
+    
+    undo() {
+        if (!this.history.length || this.over) return;
+        const h = this.history.pop();
+        if (h.t === 'p') {
+            this.board[h.pos] = null;
+            this.placed[h.p]--;
+            const c = document.querySelector(`.coin[data-pos="${h.pos}"]:not(.ghost)`);
+            if (c) c.remove();
+            if (this.phase === 'move') this.phase = 'place';
+        } else {
+            this.board[h.from] = h.p;
+            this.board[h.to] = null;
+            const c = document.querySelector(`.coin[data-pos="${h.to}"]:not(.ghost)`);
+            if (c) { c.dataset.pos = h.from; this.position(c, h.from); }
+        }
+        this.turn = h.p;
+        this.clearSel();
         this.updateUI();
     }
     
     updateUI() {
-        // Update player status
-        document.getElementById('player1Status').classList.toggle('active', this.currentPlayer === 1);
-        document.getElementById('player2Status').classList.toggle('active', this.currentPlayer === 2);
-        
-        // Update coins left
-        document.getElementById('p1Coins').textContent = 
-            this.phase === 'placement' ? `${3 - this.coinsPlaced[1]} coins left` : '3 coins';
-        document.getElementById('p2Coins').textContent = 
-            this.phase === 'placement' ? `${3 - this.coinsPlaced[2]} coins left` : '3 coins';
-        
-        // Update phase indicator
-        document.getElementById('phaseIndicator').textContent = 
-            this.phase === 'placement' ? 'Placement Phase' : 'Movement Phase';
-        
-        // Update undo button
-        document.getElementById('undoBtn').disabled = this.moveHistory.length === 0 || this.gameOver;
-        
-        // Update message
-        if (!this.gameOver) {
-            const playerName = this.currentPlayer === 1 ? 'Player 1' : 
-                              (this.gameMode === 'pvc' ? 'Robot' : 'Player 2');
-            const action = this.phase === 'placement' ? 'place a coin' : 'move a coin';
-            this.showMessage(`${playerName}'s turn to ${action}`);
-        }
-    }
-    
-    showMessage(text) {
-        document.getElementById('message').textContent = text;
+        document.getElementById('p1Panel').classList.toggle('active', this.turn === 1);
+        document.getElementById('p2Panel').classList.toggle('active', this.turn === 2);
+        document.getElementById('p1Status').textContent = this.phase === 'place' ? (3 - this.placed[1]) + ' coins' : 'Ready';
+        document.getElementById('p2Status').textContent = this.phase === 'place' ? (3 - this.placed[2]) + ' coins' : 'Ready';
+        document.getElementById('phaseText').textContent = this.phase === 'place' ? 'Tap to place coin' : 'Tap coin → Tap destination';
+        document.getElementById('undoBtn').disabled = !this.history.length || this.over;
     }
 }
 
-// Initialize game when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    new ShisimaGame();
-});
+document.addEventListener('DOMContentLoaded', () => new Game());
