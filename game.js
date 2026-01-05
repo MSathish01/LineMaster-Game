@@ -279,22 +279,41 @@ class LineMaster {
     syncFromServer(d) {
         if (this.over || !d) return;
         
-        // Parse board string "012001020" -> array
-        const newBoard = d.board.split('').map(c => c === '0' ? null : parseInt(c));
-        const newTurn = d.turn;
+        // Parse board - handle both string and array/object formats
+        let newBoard = Array(9).fill(null);
+        if (typeof d.board === 'string') {
+            newBoard = d.board.split('').map(c => c === '0' ? null : parseInt(c));
+        } else if (Array.isArray(d.board)) {
+            newBoard = d.board.map(v => v === 0 ? null : v);
+        } else if (d.board && typeof d.board === 'object') {
+            for (let i = 0; i < 9; i++) {
+                newBoard[i] = d.board[i] ? d.board[i] : null;
+            }
+        }
         
+        const newTurn = d.turn || 1;
+        
+        // Update local state
         this.board = newBoard;
         this.turn = newTurn;
-        this.phase = d.phase;
-        this.placed[1] = d.c1;
-        this.placed[2] = d.c2;
-        this.names[1] = d.p1;
+        this.phase = d.phase || 'place';
+        this.placed[1] = d.c1 || d.placed1 || (d.placed ? d.placed[1] : 0) || 0;
+        this.placed[2] = d.c2 || d.placed2 || (d.placed ? d.placed[2] : 0) || 0;
+        if (d.p1) this.names[1] = d.p1;
+        if (d.host) this.names[1] = d.host;
         if (d.p2) this.names[2] = d.p2;
+        if (d.guest) this.names[2] = d.guest;
         
         this.rebuildBoard();
         this.updateUI();
         
-        if (d.winner) this.win(d.winner);
+        // Show turn notification
+        if (this.turn === this.playerId && !this.over) {
+            this.toast("Your turn!");
+            this.haptic();
+        }
+        
+        if (d.winner && !this.over) this.win(d.winner);
     }
     
     pushToServer() {
@@ -340,17 +359,31 @@ class LineMaster {
     
     canPlay() {
         if (this.over) return false;
-        if (this.mode === 'online' && this.turn !== this.playerId) {
-            return false;
+        if (this.mode === 'online') {
+            const canI = this.turn === this.playerId;
+            return canI;
         }
         return true;
     }
     
     onNodeClick(pos) {
-        if (!this.canPlay()) {
-            if (this.mode === 'online') this.toast("Wait for your turn!");
+        // Always allow click in local/robot mode
+        if (this.mode !== 'online') {
+            this.handleNodeAction(pos);
             return;
         }
+        
+        // Online mode - check turn
+        if (this.turn !== this.playerId) {
+            this.toast("Wait! It's " + this.names[this.turn] + "'s turn");
+            return;
+        }
+        
+        this.handleNodeAction(pos);
+    }
+    
+    handleNodeAction(pos) {
+        if (this.over) return;
         
         if (this.phase === 'place') {
             if (this.board[pos] === null) this.place(pos);
@@ -645,7 +678,16 @@ class LineMaster {
         document.getElementById('p1Status').textContent = this.phase === 'place' ? `${3 - this.placed[1]} coins` : 'Move';
         document.getElementById('p2Status').textContent = this.phase === 'place' ? `${3 - this.placed[2]} coins` : 'Move';
         
-        document.getElementById('phaseText').textContent = this.phase === 'place' ? 'Place your coins' : 'Move to align 3';
+        // Show phase and turn info
+        let phaseText = this.phase === 'place' ? 'Place your coins' : 'Move to align 3';
+        if (this.mode === 'online') {
+            if (this.turn === this.playerId) {
+                phaseText = '🟢 YOUR TURN - ' + phaseText;
+            } else {
+                phaseText = '⏳ Waiting for ' + this.names[this.turn];
+            }
+        }
+        document.getElementById('phaseText').textContent = phaseText;
         document.getElementById('undoBtn').disabled = this.mode === 'online';
     }
     
