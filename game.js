@@ -321,6 +321,8 @@ class LineMaster {
     }
     
     startOnlineGame() {
+        console.log('startOnlineGame - playerId:', this.playerId, 'names:', this.names);
+        
         this.mode = 'online';
         this.board = Array(9).fill(null);
         this.turn = 1;
@@ -341,13 +343,15 @@ class LineMaster {
         if (this.playerId === 1) {
             this.toast("Your turn! Place a coin.");
         } else {
-            this.toast("Waiting for opponent...");
+            this.toast("Waiting for " + this.names[1] + "...");
         }
     }
     
     syncGame(data) {
         if (this.over) return;
         if (!data) return;
+        
+        console.log('syncGame:', data, 'playerId:', this.playerId);
         
         // Update names
         if (data.host) this.names[1] = data.host;
@@ -368,25 +372,22 @@ class LineMaster {
         const serverPlaced1 = data.placed1 || 0;
         const serverPlaced2 = data.placed2 || 0;
         
-        // Check if state changed
-        const boardStr = JSON.stringify(this.board);
-        const serverBoardStr = JSON.stringify(serverBoard);
+        // Always update state from server
+        this.board = serverBoard;
+        this.turn = serverTurn;
+        this.phase = serverPhase;
+        this.placed[1] = serverPlaced1;
+        this.placed[2] = serverPlaced2;
         
-        if (boardStr !== serverBoardStr || this.turn !== serverTurn) {
-            this.board = serverBoard;
-            this.turn = serverTurn;
-            this.phase = serverPhase;
-            this.placed[1] = serverPlaced1;
-            this.placed[2] = serverPlaced2;
-            
-            this.rebuildBoard();
-            this.updateUI();
-            
-            // Notify if it's now your turn
-            if (this.turn === this.playerId) {
-                this.toast("Your turn!");
-                this.haptic();
-            }
+        this.rebuildBoard();
+        this.updateUI();
+        
+        console.log('After sync - turn:', this.turn, 'playerId:', this.playerId);
+        
+        // Notify if it's now your turn
+        if (this.turn === this.playerId) {
+            this.toast("Your turn!");
+            this.haptic();
         }
         
         if (data.winner && !this.over) {
@@ -569,10 +570,12 @@ class LineMaster {
     tapNode(pos) {
         if (this.over) return;
         
+        console.log('tapNode:', pos, 'turn:', this.turn, 'playerId:', this.playerId, 'mode:', this.mode);
+        
         // Online mode: only allow moves on your turn
         if (this.mode === 'online') {
             if (this.turn !== this.playerId) {
-                this.toast("Wait for your turn!");
+                this.toast("Wait for your turn! (Turn: " + this.turn + ", You: " + this.playerId + ")");
                 return;
             }
         }
