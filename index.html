@@ -5,29 +5,102 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#1a1a2e">
-    <title>LineMaster</title>
+    <title>LineMaster - Online Multiplayer</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="app">
-        <!-- Setup Screen -->
-        <div class="screen" id="setupScreen">
-            <div class="setup-box">
+        <!-- Home Screen -->
+        <div class="screen" id="homeScreen">
+            <div class="home-box">
                 <h1>🎮 LineMaster</h1>
-                <p>Align 3 to Win!</p>
-                <div class="mode-btns">
-                    <button class="mode-btn active" id="pvpBtn">👥 2 Players</button>
-                    <button class="mode-btn" id="pvcBtn">🤖 vs Robot</button>
+                <p class="tagline">Align 3 to Win!</p>
+                
+                <div class="user-info" id="userInfo">
+                    <button class="login-btn" id="loginBtn">🔑 Sign in with Google</button>
                 </div>
+                
+                <div class="menu-buttons">
+                    <button class="menu-btn local" id="localBtn">
+                        <span class="icon">👥</span>
+                        <span class="label">Local Game</span>
+                        <span class="desc">Play on same device</span>
+                    </button>
+                    <button class="menu-btn online" id="onlineBtn">
+                        <span class="icon">🌐</span>
+                        <span class="label">Play Online</span>
+                        <span class="desc">Invite a friend</span>
+                    </button>
+                    <button class="menu-btn robot" id="robotBtn">
+                        <span class="icon">🤖</span>
+                        <span class="label">vs Robot</span>
+                        <span class="desc">Challenge AI</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Local Setup Screen -->
+        <div class="screen hidden" id="localSetup">
+            <div class="setup-box">
+                <button class="back-btn" id="localBack">← Back</button>
+                <h2>Local Game</h2>
                 <div class="name-field">
                     <label>Player 1 Name</label>
-                    <input type="text" id="p1NameInput" value="Player 1" maxlength="12">
+                    <input type="text" id="p1Input" value="Player 1" maxlength="12">
                 </div>
-                <div class="name-field" id="p2Field">
+                <div class="name-field">
                     <label>Player 2 Name</label>
-                    <input type="text" id="p2NameInput" value="Player 2" maxlength="12">
+                    <input type="text" id="p2Input" value="Player 2" maxlength="12">
                 </div>
-                <button class="start-btn" id="startBtn">Start Game</button>
+                <button class="start-btn" id="startLocal">Start Game</button>
+            </div>
+        </div>
+
+        <!-- Online Setup Screen -->
+        <div class="screen hidden" id="onlineSetup">
+            <div class="setup-box">
+                <button class="back-btn" id="onlineBack">← Back</button>
+                <h2>Play Online</h2>
+                
+                <div class="name-field">
+                    <label>Your Name</label>
+                    <input type="text" id="onlineName" value="Player" maxlength="12">
+                </div>
+                
+                <div class="online-options">
+                    <button class="option-btn create" id="createRoom">
+                        <span class="icon">➕</span>
+                        <span>Create Room</span>
+                    </button>
+                    <div class="divider">OR</div>
+                    <div class="join-section">
+                        <input type="text" id="roomCodeInput" placeholder="Enter Room Code" maxlength="6">
+                        <button class="option-btn join" id="joinRoom">Join</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Waiting Room -->
+        <div class="screen hidden" id="waitingRoom">
+            <div class="setup-box waiting">
+                <h2>Waiting for Friend</h2>
+                <div class="room-code-display">
+                    <span>Room Code</span>
+                    <div class="code" id="roomCodeDisplay">------</div>
+                    <button class="copy-btn" id="copyCode">📋 Copy</button>
+                </div>
+                <div class="share-section">
+                    <button class="share-btn" id="shareLink">🔗 Share Invite Link</button>
+                </div>
+                <div class="waiting-animation">
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                </div>
+                <p class="waiting-text">Share the code with your friend</p>
+                <button class="cancel-btn" id="cancelWait">Cancel</button>
             </div>
         </div>
 
@@ -43,6 +116,9 @@
             </div>
 
             <div class="game-area">
+                <div class="online-indicator hidden" id="onlineIndicator">
+                    <span class="live-dot"></span> Online
+                </div>
                 <div class="phase-text" id="phaseText">Place your coins</div>
                 <div class="board-wrap">
                     <svg class="board-lines" viewBox="0 0 300 300">
@@ -86,14 +162,25 @@
 
         <!-- Win Modal -->
         <div class="modal" id="winModal">
-            <div class="modal-content">
+            <div class="modal-content win-modal">
+                <div class="confetti"></div>
                 <div class="trophy">🏆</div>
                 <h2 id="winText">Player Wins!</h2>
-                <button class="modal-btn" id="againBtn">Play Again</button>
-                <button class="modal-btn secondary" id="newBtn">New Game</button>
+                <div class="modal-btns">
+                    <button class="modal-btn primary" id="againBtn">Play Again</button>
+                    <button class="modal-btn" id="newBtn">Main Menu</button>
+                </div>
             </div>
         </div>
+
+        <!-- Toast Notification -->
+        <div class="toast hidden" id="toast"></div>
     </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
     <script src="game.js"></script>
 </body>
 </html>

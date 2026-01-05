@@ -1,6 +1,6 @@
 # 🎮 LineMaster Game
 
-A modern, strategic board game inspired by Shisima and Achi, featuring stunning visuals, smooth animations, and an intelligent AI opponent.
+A modern, strategic board game inspired by Shisima and Achi, featuring stunning visuals, smooth animations, online multiplayer, and an intelligent AI opponent.
 
 ## 🌐 Play Now
 
@@ -11,8 +11,15 @@ A modern, strategic board game inspired by Shisima and Achi, featuring stunning 
 ![HTML5](https://img.shields.io/badge/HTML5-E34F26?logo=html5&logoColor=white)
 ![CSS3](https://img.shields.io/badge/CSS3-1572B6?logo=css3&logoColor=white)
 ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=black)
+![Firebase](https://img.shields.io/badge/Firebase-FFCA28?logo=firebase&logoColor=black)
 
 ## ✨ Features
+
+### 🌐 Online Multiplayer
+- **Room Codes**: Create a room and share 6-digit code with friends
+- **Invite Links**: Share direct links to join your game
+- **Real-time Sync**: Firebase-powered live game state synchronization
+- **Google Login**: Optional sign-in to save your name
 
 ### 🎯 Gameplay
 - **Two-Phase Strategy**: Placement phase followed by movement phase
@@ -30,11 +37,12 @@ A modern, strategic board game inspired by Shisima and Achi, featuring stunning 
 - **Smooth Animations**: Cubic-bezier easing for fluid coin movements
 - **Dynamic Feedback**: Glowing lines, pulsing nodes, and ghost previews
 - **Responsive Layout**: Works perfectly on desktop and mobile devices
+- **Trophy Celebration**: Confetti and animations on victory
 
 ### 🎮 Controls
 - **Drag & Drop**: Intuitive coin movement with smooth tracking
 - **Click to Select**: Alternative control method for precision
-- **Touch Support**: Full mobile compatibility
+- **Touch Support**: Full mobile compatibility with haptic feedback
 - **Visual Guides**: Ghost coins show valid moves
 
 ## 🚀 Quick Start
@@ -73,8 +81,9 @@ Align your 3 coins in a straight line (horizontal, vertical, or diagonal) before
 4. First player to align 3 coins wins!
 
 ### Game Modes
-- **Player vs Player**: Challenge a friend locally
-- **Player vs Robot**: Test your skills against the AI
+- **Local Game**: Challenge a friend on the same device
+- **Online Multiplayer**: Invite friends with room codes
+- **vs Robot**: Test your skills against the AI
 
 ## 🎯 Strategy Tips
 
@@ -88,8 +97,9 @@ Align your 3 coins in a straight line (horizontal, vertical, or diagonal) before
 
 ### Technologies
 - Pure HTML5, CSS3, and Vanilla JavaScript
-- No external dependencies or frameworks
-- Fully client-side - works offline
+- Firebase Realtime Database for online multiplayer
+- Firebase Authentication for Google login
+- Fully responsive - works on all devices
 
 ### Key Components
 - **Game Logic**: Complete rule validation and state management
