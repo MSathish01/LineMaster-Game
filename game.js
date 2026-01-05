@@ -1,12 +1,12 @@
 // Firebase Configuration
 const firebaseConfig = {
-    apiKey: "AIzaSyBxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    apiKey: "AIzaSyDYtOcGPllr_3-9ZmVpkx-vVs2iIBZkA2I",
     authDomain: "linemaster-game.firebaseapp.com",
     databaseURL: "https://linemaster-game-default-rtdb.firebaseio.com",
     projectId: "linemaster-game",
-    storageBucket: "linemaster-game.appspot.com",
-    messagingSenderId: "000000000000",
-    appId: "1:000000000000:web:xxxxxxxxxxxxxx"
+    storageBucket: "linemaster-game.firebasestorage.app",
+    messagingSenderId: "782658360944",
+    appId: "1:782658360944:web:a1e8240dc058e0f6c306b5"
 };
 
 // Initialize Firebase
