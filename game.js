@@ -158,13 +158,14 @@ class LineMaster {
         this.roomId = this.generateCode();
         this.playerId = 1;
         this.names[1] = name;
+        this.gameStarted = false;
         
         this.roomRef = db.ref('rooms/' + this.roomId);
         this.roomRef.set({
             host: name,
             hostId: this.user?.uid || 'guest_' + Date.now(),
             guest: null,
-            board: [null,null,null,null,null,null,null,null,null],
+            board: {0:0,1:0,2:0,3:0,4:0,5:0,6:0,7:0,8:0},
             turn: 1,
             phase: 'place',
             placed1: 0,
@@ -180,13 +181,17 @@ class LineMaster {
             const data = snap.val();
             if (!data) return;
             
-            if (data.guest && data.status === 'waiting') {
-                this.roomRef.update({ status: 'playing' });
+            // Guest joined - start game
+            if (data.guest && !this.gameStarted) {
+                this.gameStarted = true;
                 this.names[2] = data.guest;
+                this.roomRef.update({ status: 'playing' });
                 this.startOnlineGame();
+                return;
             }
             
-            if (data.status === 'playing') {
+            // Game in progress - sync
+            if (data.status === 'playing' && this.gameStarted) {
                 this.syncGame(data);
             }
         });
@@ -203,6 +208,7 @@ class LineMaster {
         this.roomId = code;
         this.playerId = 2;
         this.names[2] = name;
+        this.gameStarted = false;
         
         this.roomRef = db.ref('rooms/' + this.roomId);
         this.roomRef.once('value').then(snap => {
@@ -217,19 +223,30 @@ class LineMaster {
             }
             
             this.names[1] = data.host;
+            
+            // Join the room
             this.roomRef.update({
                 guest: name,
                 guestId: this.user?.uid || 'guest_' + Date.now()
             });
             
+            // Listen for game updates
             this.roomRef.on('value', snap => {
                 const d = snap.val();
-                if (d && d.status === 'playing') {
+                if (!d) return;
+                
+                // Start game when status changes to playing
+                if (d.status === 'playing' && !this.gameStarted) {
+                    this.gameStarted = true;
+                    this.startOnlineGame();
+                    return;
+                }
+                
+                // Sync game state
+                if (d.status === 'playing' && this.gameStarted) {
                     this.syncGame(d);
                 }
             });
-            
-            this.startOnlineGame();
         });
     }
     
@@ -336,18 +353,26 @@ class LineMaster {
         if (data.host) this.names[1] = data.host;
         if (data.guest) this.names[2] = data.guest;
         
-        // Get server state
-        const serverBoard = data.board || [null,null,null,null,null,null,null,null,null];
+        // Parse board - Firebase stores as object
+        let serverBoard = [];
+        if (data.board) {
+            for (let i = 0; i < 9; i++) {
+                serverBoard[i] = data.board[i] === 0 ? null : data.board[i];
+            }
+        } else {
+            serverBoard = Array(9).fill(null);
+        }
+        
         const serverTurn = data.turn || 1;
         const serverPhase = data.phase || 'place';
         const serverPlaced1 = data.placed1 || 0;
         const serverPlaced2 = data.placed2 || 0;
         
-        // Check if server state is different
-        const boardChanged = JSON.stringify(this.board) !== JSON.stringify(serverBoard);
-        const turnChanged = this.turn !== serverTurn;
+        // Check if state changed
+        const boardStr = JSON.stringify(this.board);
+        const serverBoardStr = JSON.stringify(serverBoard);
         
-        if (boardChanged || turnChanged) {
+        if (boardStr !== serverBoardStr || this.turn !== serverTurn) {
             this.board = serverBoard;
             this.turn = serverTurn;
             this.phase = serverPhase;
@@ -357,9 +382,10 @@ class LineMaster {
             this.rebuildBoard();
             this.updateUI();
             
-            // Notify player
+            // Notify if it's now your turn
             if (this.turn === this.playerId) {
                 this.toast("Your turn!");
+                this.haptic();
             }
         }
         
@@ -377,8 +403,15 @@ class LineMaster {
     
     pushOnline() {
         if (this.mode !== 'online' || !this.roomRef) return;
+        
+        // Convert board to object for Firebase
+        const boardObj = {};
+        for (let i = 0; i < 9; i++) {
+            boardObj[i] = this.board[i] === null ? 0 : this.board[i];
+        }
+        
         this.roomRef.update({
-            board: this.board,
+            board: boardObj,
             turn: this.turn,
             phase: this.phase,
             placed1: this.placed[1],
@@ -925,7 +958,7 @@ class LineMaster {
         
         if (this.mode === 'online' && this.roomRef) {
             this.roomRef.update({
-                board: [null,null,null,null,null,null,null,null,null],
+                board: {0:0,1:0,2:0,3:0,4:0,5:0,6:0,7:0,8:0},
                 turn: 1,
                 phase: 'place',
                 placed1: 0,
