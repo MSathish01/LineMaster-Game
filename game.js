@@ -304,24 +304,59 @@ class LineMaster {
     
     startOnlineGame() {
         this.mode = 'online';
-        this.resetGame();
+        this.board = Array(9).fill(null);
+        this.turn = 1;
+        this.phase = 'place';
+        this.placed = [0, 0, 0];
+        this.selected = null;
+        this.over = false;
+        this.history = [];
+        document.querySelectorAll('.coin').forEach(c => c.remove());
+        document.querySelectorAll('.node').forEach(n => n.classList.remove('valid'));
+        document.getElementById('winModal').classList.remove('show');
+        
         this.showScreen('gameScreen');
         document.getElementById('onlineIndicator').classList.remove('hidden');
         this.updateUI();
+        
+        // Show whose turn it is
+        if (this.playerId === 1) {
+            this.toast("Your turn! Place a coin.");
+        } else {
+            this.toast("Waiting for opponent...");
+        }
     }
     
     syncGame(data) {
         if (this.over) return;
+        if (!data) return;
         
-        this.board = data.board || Array(9).fill(null);
-        this.turn = data.turn || 1;
-        this.phase = data.phase || 'place';
-        this.placed = data.placed || [0, 0, 0];
+        // Update names
+        if (data.host) this.names[1] = data.host;
+        if (data.guest) this.names[2] = data.guest;
         
-        this.rebuildBoard();
-        this.updateUI();
+        // Only sync if it's not our turn (opponent made a move)
+        // Or if the data is different from our local state
+        const serverBoard = data.board || Array(9).fill(null);
+        const serverTurn = data.turn || 1;
+        const serverPhase = data.phase || 'place';
+        const serverPlaced = data.placed || [0, 0, 0];
         
-        if (data.winner) {
+        // Check if server state is different
+        const boardChanged = JSON.stringify(this.board) !== JSON.stringify(serverBoard);
+        const turnChanged = this.turn !== serverTurn;
+        
+        if (boardChanged || turnChanged) {
+            this.board = serverBoard;
+            this.turn = serverTurn;
+            this.phase = serverPhase;
+            this.placed = serverPlaced;
+            
+            this.rebuildBoard();
+            this.updateUI();
+        }
+        
+        if (data.winner && !this.over) {
             this.win(data.winner);
         }
     }
@@ -492,7 +527,14 @@ class LineMaster {
     
     tapNode(pos) {
         if (this.over) return;
-        if (this.mode === 'online' && this.turn !== this.playerId) return;
+        
+        // Online mode: only allow moves on your turn
+        if (this.mode === 'online') {
+            if (this.turn !== this.playerId) {
+                this.toast("Wait for your turn!");
+                return;
+            }
+        }
         
         if (this.phase === 'place') {
             if (this.board[pos] === null) {
