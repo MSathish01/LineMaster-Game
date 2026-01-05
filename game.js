@@ -71,6 +71,7 @@ class LineMaster {
         document.getElementById('onlineBack').onclick = () => this.showScreen('homeScreen');
         document.getElementById('createRoom').onclick = () => this.createRoom();
         document.getElementById('joinRoom').onclick = () => this.joinRoom();
+        document.getElementById('quickJoin').onclick = () => this.quickJoin();
         
         document.getElementById('copyCode').onclick = () => this.copyRoomCode();
         document.getElementById('shareLink').onclick = () => this.shareLink();
@@ -236,6 +237,44 @@ class LineMaster {
         let code = '';
         for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
         return code;
+    }
+    
+    quickJoin() {
+        const name = document.getElementById('onlineName').value || 'Player';
+        this.toast('Finding a game...');
+        
+        db.ref('rooms').orderByChild('status').equalTo('waiting').limitToFirst(10).once('value').then(snap => {
+            const rooms = snap.val();
+            if (!rooms) {
+                this.toast('No rooms available. Creating one...');
+                this.createRoom();
+                return;
+            }
+            
+            // Find first available room
+            const roomIds = Object.keys(rooms);
+            const now = Date.now();
+            
+            for (const roomId of roomIds) {
+                const room = rooms[roomId];
+                // Skip rooms older than 5 minutes
+                if (now - room.created > 300000) continue;
+                if (!room.guest) {
+                    // Join this room
+                    document.getElementById('roomCodeInput').value = roomId;
+                    this.joinRoom();
+                    return;
+                }
+            }
+            
+            // No available rooms, create one
+            this.toast('No rooms available. Creating one...');
+            this.createRoom();
+        }).catch(err => {
+            console.error(err);
+            this.toast('Error finding rooms. Creating one...');
+            this.createRoom();
+        });
     }
     
     copyRoomCode() {
