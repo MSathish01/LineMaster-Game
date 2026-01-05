@@ -164,10 +164,11 @@ class LineMaster {
             host: name,
             hostId: this.user?.uid || 'guest_' + Date.now(),
             guest: null,
-            board: Array(9).fill(null),
+            board: [null,null,null,null,null,null,null,null,null],
             turn: 1,
             phase: 'place',
-            placed: [0, 0, 0],
+            placed1: 0,
+            placed2: 0,
             status: 'waiting',
             created: Date.now()
         });
@@ -335,12 +336,12 @@ class LineMaster {
         if (data.host) this.names[1] = data.host;
         if (data.guest) this.names[2] = data.guest;
         
-        // Only sync if it's not our turn (opponent made a move)
-        // Or if the data is different from our local state
-        const serverBoard = data.board || Array(9).fill(null);
+        // Get server state
+        const serverBoard = data.board || [null,null,null,null,null,null,null,null,null];
         const serverTurn = data.turn || 1;
         const serverPhase = data.phase || 'place';
-        const serverPlaced = data.placed || [0, 0, 0];
+        const serverPlaced1 = data.placed1 || 0;
+        const serverPlaced2 = data.placed2 || 0;
         
         // Check if server state is different
         const boardChanged = JSON.stringify(this.board) !== JSON.stringify(serverBoard);
@@ -350,10 +351,16 @@ class LineMaster {
             this.board = serverBoard;
             this.turn = serverTurn;
             this.phase = serverPhase;
-            this.placed = serverPlaced;
+            this.placed[1] = serverPlaced1;
+            this.placed[2] = serverPlaced2;
             
             this.rebuildBoard();
             this.updateUI();
+            
+            // Notify player
+            if (this.turn === this.playerId) {
+                this.toast("Your turn!");
+            }
         }
         
         if (data.winner && !this.over) {
@@ -374,7 +381,8 @@ class LineMaster {
             board: this.board,
             turn: this.turn,
             phase: this.phase,
-            placed: this.placed,
+            placed1: this.placed[1],
+            placed2: this.placed[2],
             winner: this.over ? (this.turn === 1 ? 2 : 1) : null
         });
     }
@@ -917,10 +925,11 @@ class LineMaster {
         
         if (this.mode === 'online' && this.roomRef) {
             this.roomRef.update({
-                board: Array(9).fill(null),
+                board: [null,null,null,null,null,null,null,null,null],
                 turn: 1,
                 phase: 'place',
-                placed: [0, 0, 0],
+                placed1: 0,
+                placed2: 0,
                 winner: null
             });
         }
